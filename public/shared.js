@@ -38,6 +38,7 @@ function injectNav() {
   nav.innerHTML = `
     <a href="/">🏠 Home</a>
     <a href="/sudoku.html">🧩 Sudoku</a>
+    <a href="/minesweeper.html">💣 Minesweeper</a>
     ${loggedIn
       ? `<a href="/profile.html">👤 Profile</a><a href="#" onclick="logout();return false;">Logout</a>`
       : `<a href="/login.html">🔑 Login</a>`
