@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Game Hub</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh;
+    background: #1a1a2e; color: #eee;
+  }
+  .card {
+    background: #16213e; border: 2px solid #334; border-radius: 16px;
+    padding: 40px; width: 360px; text-align: center;
+  }
+  h1 { color: #e94560; margin-bottom: 8px; font-size: 24px; }
+  .toggle { color: #aaa; font-size: 13px; margin-bottom: 24px; }
+  .toggle a { color: #4ee; cursor: pointer; text-decoration: underline; }
+  input {
+    width: 100%; padding: 12px 16px; margin-bottom: 12px;
+    border: 2px solid #334; border-radius: 8px;
+    background: #1a1a2e; color: #eee; font-size: 15px;
+    outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: #e94560; }
+  button {
+    width: 100%; padding: 12px; margin-top: 8px;
+    background: #e94560; color: #fff; border: none; border-radius: 8px;
+    font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s;
+  }
+  button:hover { background: #c73652; }
+  .error-msg { color: #ff4444; font-size: 13px; margin-top: 12px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1 id="title">Login</h1>
+  <p class="toggle" id="toggleText">
+    Don't have an account? <a id="toggleLink" onclick="toggleMode()">Register</a>
+  </p>
+  <form id="authForm" onsubmit="handleSubmit(event)">
+    <input type="text" id="username" placeholder="Username" autocomplete="username" required />
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
+    <div id="nameField" style="display:none">
+      <input type="text" id="displayName" placeholder="Display Name (optional)" />
+    </div>
+    <button type="submit" id="submitBtn">Login</button>
+  </form>
+  <p class="error-msg" id="errorMsg"></p>
+</div>
+
+<script src="/shared.js"></script>
+<script>
+let isRegister = false;
+
+function toggleMode() {
+  isRegister = !isRegister;
+  document.getElementById('title').textContent = isRegister ? 'Register' : 'Login';
+  document.getElementById('submitBtn').textContent = isRegister ? 'Create Account' : 'Login';
+  document.getElementById('nameField').style.display = isRegister ? 'block' : 'none';
+  document.getElementById('toggleText').innerHTML = isRegister
+    ? 'Already have an account? <a onclick="toggleMode()">Login</a>'
+    : 'Don\'t have an account? <a onclick="toggleMode()">Register</a>';
+  document.getElementById('errorMsg').textContent = '';
+}
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const display_name = document.getElementById('displayName').value.trim();
+  const errorEl = document.getElementById('errorMsg');
+  errorEl.textContent = '';
+
+  const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+  const body = isRegister ? { username, password, display_name } : { username, password };
+
+  try {
+    const res = await apiPost(endpoint, body);
+    const data = await res.json();
+    if (!res.ok) { errorEl.textContent = data.error; return; }
+    localStorage.setItem('token', data.token);
+    window.location.href = '/profile.html';
+  } catch (err) {
+    errorEl.textContent = 'Connection error. Try again.';
+  }
+}
+
+if (isLoggedIn()) window.location.href = '/profile.html';
+</script>
+</body>
+</html>

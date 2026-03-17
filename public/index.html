@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Hub</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; background: #1a1a2e; color: #eee;
+  }
+  .hero { text-align: center; margin: 40px 0 30px; }
+  .hero h1 { font-size: 36px; color: #e94560; }
+  .hero p { color: #aaa; margin-top: 8px; }
+  .games { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  .game-card {
+    background: #16213e; border: 2px solid #334; border-radius: 16px;
+    width: 260px; padding: 30px; text-align: center;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer; text-decoration: none; color: inherit;
+  }
+  .game-card:hover { border-color: #e94560; transform: translateY(-4px); }
+  .game-card .icon { font-size: 48px; margin-bottom: 12px; }
+  .game-card h2 { font-size: 20px; color: #eee; margin-bottom: 6px; }
+  .game-card p { font-size: 13px; color: #aaa; }
+
+  .leaderboard-section { margin-top: 40px; width: 400px; max-width: 90vw; }
+  .leaderboard-section h2 { color: #e94560; font-size: 20px; margin-bottom: 12px; text-align: center; }
+  table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 14px; text-align: left; font-size: 14px; }
+  th { background: #0f3460; color: #4ee; font-weight: 700; }
+  td { border-top: 1px solid #334; color: #ccc; }
+  .rank { color: #e94560; font-weight: 700; }
+  .empty-lb { text-align: center; color: #666; padding: 20px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>🎮 Game Hub</h1>
+  <p>Play games, track your scores, compete on the leaderboard!</p>
+</div>
+
+<div class="games">
+  <a class="game-card" href="/sudoku.html">
+    <div class="icon">🧩</div>
+    <h2>Sudoku 6×6</h2>
+    <p>Classic puzzle with numbers 1–6. Fill the grid!</p>
+  </a>
+  <div class="game-card" style="opacity:0.4; cursor:default;">
+    <div class="icon">🔮</div>
+    <h2>Coming Soon</h2>
+    <p>More games on the way...</p>
+  </div>
+</div>
+
+<div class="leaderboard-section">
+  <h2>🏆 Sudoku Leaderboard</h2>
+  <table id="lbTable">
+    <thead><tr><th>#</th><th>Player</th><th>Time</th><th>Errors</th></tr></thead>
+    <tbody id="lbBody"><tr><td colspan="4" class="empty-lb">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<script src="/shared.js"></script>
+<script>
+async function loadLeaderboard() {
+  try {
+    const res = await fetch('/api/scores/leaderboard?game=sudoku-6x6');
+    const data = await res.json();
+    const tbody = document.getElementById('lbBody');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-lb">No scores yet. Be the first!</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map((r, i) => `
+      <tr>
+        <td class="rank">${i + 1}</td>
+        <td>${r.display_name || r.username}</td>
+        <td>${formatTime(r.time_seconds)}</td>
+        <td>${r.errors}</td>
+      </tr>
+    `).join('');
+  } catch {
+    document.getElementById('lbBody').innerHTML =
+      '<tr><td colspan="4" class="empty-lb">Could not load leaderboard</td></tr>';
+  }
+}
+loadLeaderboard();
+</script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile — Game Hub</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; background: #1a1a2e; color: #eee;
+  }
+  .profile-header {
+    text-align: center; margin: 30px 0 20px;
+  }
+  .avatar {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: #0f3460; border: 3px solid #e94560;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; margin: 0 auto 12px;
+  }
+  .profile-header h1 { color: #e94560; font-size: 24px; }
+  .profile-header p { color: #aaa; font-size: 13px; }
+
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin: 20px 0; width: 500px; max-width: 90vw;
+  }
+  .stat-card {
+    background: #16213e; border: 1px solid #334; border-radius: 12px;
+    padding: 16px; text-align: center;
+  }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: #4ee; }
+  .stat-card .label { font-size: 12px; color: #aaa; margin-top: 4px; }
+
+  .history-section { width: 600px; max-width: 90vw; margin-top: 20px; }
+  .history-section h2 { color: #e94560; font-size: 18px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 12px; text-align: center; font-size: 13px; }
+  th { background: #0f3460; color: #4ee; font-weight: 700; }
+  td { border-top: 1px solid #334; color: #ccc; }
+  .win { color: #4ee; font-weight: 700; }
+  .loss { color: #ff4444; }
+  .empty-msg { text-align: center; color: #666; padding: 24px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="profile-header" id="profileInfo">
+  <div class="avatar">👤</div>
+  <h1>Loading...</h1>
+</div>
+
+<div class="stats-grid" id="statsGrid"></div>
+
+<div class="history-section">
+  <h2>📋 Game History</h2>
+  <table>
+    <thead><tr><th>Game</th><th>Result</th><th>Time</th><th>Errors</th><th>Hints</th><th>Date</th></tr></thead>
+    <tbody id="historyBody"><tr><td colspan="6" class="empty-msg">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<script src="/shared.js"></script>
+<script>
+if (!isLoggedIn()) window.location.href = '/login.html';
+
+async function loadProfile() {
+  const user = await getCurrentUser();
+  if (!user) return;
+
+  document.getElementById('profileInfo').innerHTML = `
+    <div class="avatar">${user.display_name.charAt(0).toUpperCase()}</div>
+    <h1>${user.display_name}</h1>
+    <p>@${user.username} · Member since ${new Date(user.created_at).toLocaleDateString()}</p>
+  `;
+
+  const res = await fetchWithAuth('/api/scores/me');
+  const data = await res.json();
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="value">${data.stats.games_played || 0}</div><div class="label">Games Played</div></div>
+    <div class="stat-card"><div class="value">${data.stats.games_won || 0}</div><div class="label">Games Won</div></div>
+    <div class="stat-card"><div class="value">${formatTime(data.stats.best_time)}</div><div class="label">Best Time</div></div>
+    <div class="stat-card"><div class="value">${formatTime(data.stats.avg_time)}</div><div class="label">Avg Time</div></div>
+    <div class="stat-card"><div class="value">${data.stats.avg_errors ?? '—'}</div><div class="label">Avg Errors</div></div>
+    <div class="stat-card"><div class="value">${data.stats.avg_hints ?? '—'}</div><div class="label">Avg Hints</div></div>
+  `;
+
+  const tbody = document.getElementById('historyBody');
+  if (!data.results.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No games yet. Go play!</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.results.map(r => `
+    <tr>
+      <td>${r.game_type}</td>
+      <td class="${r.completed ? 'win' : 'loss'}">${r.completed ? '✅ Won' : '❌ Lost'}</td>
+      <td>${formatTime(r.time_seconds)}</td>
+      <td>${r.errors}</td>
+      <td>${r.hints_used}</td>
+      <td>${new Date(r.played_at).toLocaleDateString()}</td>
+    </tr>
+  `).join('');
+}
+
+loadProfile();
+</script>
+</body>
+</html>

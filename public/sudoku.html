@@ -50,6 +50,10 @@
     margin-top: 16px; font-size: 18px; font-weight: 700;
     min-height: 28px; color: #4ee;
   }
+  .stats-bar {
+    display: flex; gap: 24px; margin-bottom: 16px; font-size: 14px; color: #aaa;
+  }
+  .stats-bar span { color: #4ee; font-weight: 700; }
   .cell.complete { background: #0a4a2a; transition: background 0.5s; }
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
@@ -84,6 +88,9 @@
 <body>
 <h1>Sudoku</h1>
 <p class="subtitle">6 × 6 · Numbers 1–6 · Click a cell, then pick a number</p>
+<div class="stats-bar">
+  ⏱ <span id="timer">0:00</span> &nbsp;|&nbsp; ❌ Errors: <span id="errorCount">0</span> &nbsp;|&nbsp; 💡 Hints: <span id="hintCount">0</span>
+</div>
 <div class="board" id="board"></div>
 <div class="numpad" id="numpad"></div>
 <div class="actions">
@@ -94,8 +101,10 @@
 <p class="msg" id="msg"></p>
 <div class="toast-container" id="toasts"></div>
 
+<script src="/shared.js"></script>
 <script>
 const SIZE = 6, BOX_R = 2, BOX_C = 3;
+let timerInterval = null, elapsedSeconds = 0, errorTotal = 0, hintTotal = 0, gameOver = false;
 
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -228,7 +237,7 @@ function select(r, c, el) {
 }
 
 function place(n) {
-  if (!selected) return;
+  if (!selected || gameOver) return;
   const { r, c, el } = selected;
   game.puzzle[r][c] = n;
   el.textContent = n;
@@ -238,6 +247,8 @@ function place(n) {
   el.style.animation = '';
   if (n !== game.solution[r][c]) {
     el.classList.add('error');
+    errorTotal++;
+    document.getElementById('errorCount').textContent = errorTotal;
   } else {
     el.classList.add('user');
     checkCompletions();
@@ -259,12 +270,16 @@ function checkWin() {
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++)
       if (game.puzzle[r][c] !== game.solution[r][c]) return;
+  gameOver = true;
+  clearInterval(timerInterval);
   document.getElementById('msg').textContent = '🎉 You solved it!';
   cells.forEach(c => { c.el.style.cursor = 'default'; c.given = true; });
   selected = null;
+  saveScore(true);
 }
 
 function hint() {
+  if (gameOver) return;
   const empty = [];
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++)
@@ -279,17 +294,49 @@ function hint() {
   cell.el.className = 'cell given';
   cell.given = true;
   if (selected && selected.r === pick.r && selected.c === pick.c) selected = null;
+  hintTotal++;
+  document.getElementById('hintCount').textContent = hintTotal;
   checkCompletions();
   checkWin();
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  elapsedSeconds = 0;
+  document.getElementById('timer').textContent = '0:00';
+  timerInterval = setInterval(() => {
+    elapsedSeconds++;
+    const m = Math.floor(elapsedSeconds / 60);
+    const s = String(elapsedSeconds % 60).padStart(2, '0');
+    document.getElementById('timer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+async function saveScore(completed) {
+  if (!isLoggedIn()) return;
+  try {
+    await apiPost('/api/scores', {
+      game_type: 'sudoku-6x6',
+      time_seconds: elapsedSeconds,
+      hints_used: hintTotal,
+      errors: errorTotal,
+      completed,
+    });
+  } catch {}
 }
 
 function newGame() {
   document.getElementById('msg').textContent = '';
   document.getElementById('toasts').innerHTML = '';
   selected = null;
+  gameOver = false;
+  errorTotal = 0; hintTotal = 0;
+  document.getElementById('errorCount').textContent = '0';
+  document.getElementById('hintCount').textContent = '0';
   celebrated = { rows: new Set(), cols: new Set(), boxes: new Set() };
   game = generatePuzzle(12);
   render();
+  startTimer();
 }
 
 // Build numpad
