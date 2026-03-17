@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku 6×6</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh;
+    background: #1a1a2e; color: #eee;
+  }
+  h1 { margin-bottom: 8px; font-size: 28px; color: #e94560; }
+  .subtitle { margin-bottom: 20px; color: #aaa; font-size: 14px; }
+  .board {
+    display: grid; grid-template-columns: repeat(6, 60px);
+    grid-template-rows: repeat(6, 60px);
+    border: 3px solid #e94560; background: #16213e;
+  }
+  .cell {
+    width: 60px; height: 60px; display: flex; align-items: center;
+    justify-content: center; font-size: 24px; font-weight: 700;
+    border: 1px solid #334;
+    cursor: pointer; user-select: none; transition: background 0.15s;
+  }
+  .cell:hover { background: #1a1a3e; }
+  .cell.selected { background: #0f3460; }
+  .cell.given { color: #e94560; cursor: default; }
+  .cell.user { color: #4ee; }
+  .cell.error { color: #ff4444; animation: shake 0.3s; }
+  /* Thick borders for 2×3 boxes */
+  .cell:nth-child(6n+4) { border-left: 3px solid #e94560; }
+  .cell:nth-child(n+13):nth-child(-n+18) { border-top: 3px solid #e94560; }
+  .cell:nth-child(n+25):nth-child(-n+30) { border-top: 3px solid #e94560; }
+
+  .numpad { display: flex; gap: 8px; margin-top: 20px; }
+  .numpad button, .action-btn {
+    width: 48px; height: 48px; font-size: 20px; font-weight: 700;
+    border: 2px solid #334; border-radius: 8px; background: #16213e;
+    color: #eee; cursor: pointer; transition: all 0.15s;
+  }
+  .numpad button:hover, .action-btn:hover {
+    background: #0f3460; border-color: #e94560;
+  }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .action-btn { width: auto; padding: 0 16px; font-size: 14px; font-weight: 600; }
+  .msg {
+    margin-top: 16px; font-size: 18px; font-weight: 700;
+    min-height: 28px; color: #4ee;
+  }
+  .cell.complete { background: #0a4a2a; transition: background 0.5s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  .toast-container {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    z-index: 100; pointer-events: none;
+  }
+  .toast {
+    background: linear-gradient(135deg, #0f3460, #16213e);
+    border: 2px solid #4ee; border-radius: 12px;
+    padding: 12px 24px; color: #4ee; font-size: 16px; font-weight: 700;
+    box-shadow: 0 4px 20px rgba(78, 238, 238, 0.3);
+    animation: toastIn 0.4s ease, toastOut 0.4s ease 1.8s forwards;
+    white-space: nowrap;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(-20px) scale(0.9); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  }
+</style>
+</head>
+<body>
+<h1>Sudoku</h1>
+<p class="subtitle">6 × 6 · Numbers 1–6 · Click a cell, then pick a number</p>
+<div class="board" id="board"></div>
+<div class="numpad" id="numpad"></div>
+<div class="actions">
+  <button class="action-btn" onclick="erase()">Erase</button>
+  <button class="action-btn" onclick="hint()">💡 Hint</button>
+  <button class="action-btn" onclick="newGame()">New Game</button>
+</div>
+<p class="msg" id="msg"></p>
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const SIZE = 6, BOX_R = 2, BOX_C = 3;
+
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+function solve(board) {
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (board[r][c] === 0) {
+        for (const n of shuffle([1,2,3,4,5,6])) {
+          if (isValid(board, r, c, n)) { board[r][c] = n; if (solve(board)) return true; board[r][c] = 0; }
+        }
+        return false;
+      }
+  return true;
+}
+
+function isValid(board, r, c, n) {
+  for (let i = 0; i < SIZE; i++) { if (board[r][i] === n || board[i][c] === n) return false; }
+  const br = (r / BOX_R | 0) * BOX_R, bc = (c / BOX_C | 0) * BOX_C;
+  for (let i = br; i < br + BOX_R; i++)
+    for (let j = bc; j < bc + BOX_C; j++)
+      if (board[i][j] === n) return false;
+  return true;
+}
+
+function generatePuzzle(clues) {
+  const solution = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  solve(solution);
+  const puzzle = solution.map(r => [...r]);
+  const cells = shuffle([...Array(SIZE * SIZE).keys()]);
+  let removed = 0;
+  for (const idx of cells) {
+    if (removed >= SIZE * SIZE - clues) break;
+    puzzle[idx / SIZE | 0][idx % SIZE] = 0;
+    removed++;
+  }
+  return { puzzle, solution };
+}
+
+let selected = null, game = null, cells = [];
+let celebrated = { rows: new Set(), cols: new Set(), boxes: new Set() };
+
+function showToast(message) {
+  const container = document.getElementById('toasts');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
+}
+
+function highlightCells(indices) {
+  indices.forEach(i => cells[i].el.classList.add('complete'));
+  setTimeout(() => indices.forEach(i => cells[i].el.classList.remove('complete')), 1500);
+}
+
+function checkCompletions() {
+  // Check rows
+  for (let r = 0; r < SIZE; r++) {
+    if (celebrated.rows.has(r)) continue;
+    let complete = true;
+    for (let c = 0; c < SIZE; c++) {
+      if (game.puzzle[r][c] !== game.solution[r][c]) { complete = false; break; }
+    }
+    if (complete) {
+      celebrated.rows.add(r);
+      const indices = [];
+      for (let c = 0; c < SIZE; c++) indices.push(r * SIZE + c);
+      highlightCells(indices);
+      showToast(`👏 Well done! Row ${r + 1} complete!`);
+    }
+  }
+  // Check columns
+  for (let c = 0; c < SIZE; c++) {
+    if (celebrated.cols.has(c)) continue;
+    let complete = true;
+    for (let r = 0; r < SIZE; r++) {
+      if (game.puzzle[r][c] !== game.solution[r][c]) { complete = false; break; }
+    }
+    if (complete) {
+      celebrated.cols.add(c);
+      const indices = [];
+      for (let r = 0; r < SIZE; r++) indices.push(r * SIZE + c);
+      highlightCells(indices);
+      showToast(`👏 Well done! Column ${c + 1} complete!`);
+    }
+  }
+  // Check boxes
+  for (let br = 0; br < SIZE; br += BOX_R) {
+    for (let bc = 0; bc < SIZE; bc += BOX_C) {
+      const boxKey = `${br},${bc}`;
+      if (celebrated.boxes.has(boxKey)) continue;
+      let complete = true;
+      for (let i = br; i < br + BOX_R; i++)
+        for (let j = bc; j < bc + BOX_C; j++)
+          if (game.puzzle[i][j] !== game.solution[i][j]) { complete = false; break; }
+      if (complete) {
+        celebrated.boxes.add(boxKey);
+        const indices = [];
+        for (let i = br; i < br + BOX_R; i++)
+          for (let j = bc; j < bc + BOX_C; j++) indices.push(i * SIZE + j);
+        highlightCells(indices);
+        const boxNum = (br / BOX_R) * (SIZE / BOX_C) + (bc / BOX_C) + 1;
+        showToast(`👏 Well done! Box ${boxNum} complete!`);
+      }
+    }
+  }
+}
+
+function render() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  cells = [];
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++) {
+      const div = document.createElement('div');
+      div.className = 'cell';
+      const val = game.puzzle[r][c];
+      if (val) { div.textContent = val; div.classList.add('given'); }
+      div.addEventListener('click', () => select(r, c, div));
+      board.appendChild(div);
+      cells.push({ el: div, r, c, given: val !== 0 });
+    }
+}
+
+function select(r, c, el) {
+  cells.forEach(c => c.el.classList.remove('selected'));
+  if (cells[r * SIZE + c].given) { selected = null; return; }
+  el.classList.add('selected');
+  selected = { r, c, el };
+}
+
+function place(n) {
+  if (!selected) return;
+  const { r, c, el } = selected;
+  game.puzzle[r][c] = n;
+  el.textContent = n;
+  el.classList.remove('error', 'user');
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = '';
+  if (n !== game.solution[r][c]) {
+    el.classList.add('error');
+  } else {
+    el.classList.add('user');
+    checkCompletions();
+  }
+  checkWin();
+}
+
+function erase() {
+  if (!selected) return;
+  const { r, c, el } = selected;
+  game.puzzle[r][c] = 0;
+  el.textContent = '';
+  el.className = 'cell';
+  el.classList.add('selected');
+  document.getElementById('msg').textContent = '';
+}
+
+function checkWin() {
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (game.puzzle[r][c] !== game.solution[r][c]) return;
+  document.getElementById('msg').textContent = '🎉 You solved it!';
+  cells.forEach(c => { c.el.style.cursor = 'default'; c.given = true; });
+  selected = null;
+}
+
+function hint() {
+  const empty = [];
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (game.puzzle[r][c] === 0 || game.puzzle[r][c] !== game.solution[r][c])
+        empty.push({ r, c });
+  if (empty.length === 0) return;
+  const pick = empty[Math.random() * empty.length | 0];
+  const idx = pick.r * SIZE + pick.c;
+  const cell = cells[idx];
+  game.puzzle[pick.r][pick.c] = game.solution[pick.r][pick.c];
+  cell.el.textContent = game.solution[pick.r][pick.c];
+  cell.el.className = 'cell given';
+  cell.given = true;
+  if (selected && selected.r === pick.r && selected.c === pick.c) selected = null;
+  checkCompletions();
+  checkWin();
+}
+
+function newGame() {
+  document.getElementById('msg').textContent = '';
+  document.getElementById('toasts').innerHTML = '';
+  selected = null;
+  celebrated = { rows: new Set(), cols: new Set(), boxes: new Set() };
+  game = generatePuzzle(12);
+  render();
+}
+
+// Build numpad
+const numpad = document.getElementById('numpad');
+for (let i = 1; i <= SIZE; i++) {
+  const btn = document.createElement('button');
+  btn.textContent = i;
+  btn.addEventListener('click', () => place(i));
+  numpad.appendChild(btn);
+}
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= 6) place(n);
+  if (e.key === 'Backspace' || e.key === 'Delete') erase();
+});
+
+newGame();
+</script>
+</body>
+</html>
